@@ -1,6 +1,5 @@
 package gc.grivyzom.grivyzomCore.database;
 
-import gc.grivyzom.grivyzomCore.config.ConfigManager;
 import gc.grivyzom.grivyzomCore.config.DatabaseConfigManager;
 import gc.grivyzom.grivyzomCore.utils.MessageUtils;
 import org.slf4j.Logger;
@@ -52,6 +51,9 @@ public class DatabaseManager {
             // Probar la conexión
             testConnection();
 
+            // Mostrar información de la base de datos
+            showDatabaseInfo();
+
             // Iniciar monitoreo de conexión
             startConnectionMonitoring();
 
@@ -75,114 +77,22 @@ public class DatabaseManager {
         }
     }
 
-    private static final String CREATE_PLAYERS_TABLE = """
-    CREATE TABLE IF NOT EXISTS grivyzom_players (
-        uuid VARCHAR(36) PRIMARY KEY,
-        username VARCHAR(16) NOT NULL,
-        first_join TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_join TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        is_online BOOLEAN DEFAULT FALSE,
-        playtime BIGINT DEFAULT 0,
-        last_ip VARCHAR(15),
-        INDEX idx_username (username),
-        INDEX idx_last_join (last_join),
-        INDEX idx_is_online (is_online)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    """;
-
-    private static final String CREATE_SERVERS_TABLE = """
-    CREATE TABLE IF NOT EXISTS grivyzom_servers (
-        server_id VARCHAR(32) PRIMARY KEY,
-        server_name VARCHAR(64) NOT NULL,
-        server_type VARCHAR(32) NOT NULL,
-        ip_address VARCHAR(15),
-        port INT,
-        max_players INT DEFAULT 100,
-        current_players INT DEFAULT 0,
-        status ENUM('ONLINE', 'OFFLINE', 'MAINTENANCE') DEFAULT 'OFFLINE',
-        last_heartbeat TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_status (status),
-        INDEX idx_server_type (server_type)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    """;
-
-    private static final String CREATE_PLUGIN_DATA_TABLE = """
-    CREATE TABLE IF NOT EXISTS grivyzom_plugin_data (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        plugin_name VARCHAR(64) NOT NULL,
-        player_uuid VARCHAR(36),
-        data_key VARCHAR(128) NOT NULL,
-        data_value LONGTEXT,
-        data_type ENUM('STRING', 'INT', 'LONG', 'DOUBLE', 'BOOLEAN', 'JSON') DEFAULT 'STRING',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_plugin_player_key (plugin_name, player_uuid, data_key),
-        INDEX idx_plugin_name (plugin_name),
-        INDEX idx_player_uuid (player_uuid),
-        FOREIGN KEY (player_uuid) REFERENCES grivyzom_players(uuid) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    """;
-
-    public DatabaseManager(ConfigManager configManager, Logger logger) {
-        this.configManager = configManager;
-        this.logger = logger;
-        this.executor = Executors.newScheduledThreadPool(2);
-    }
-
     /**
-     * Inicializa la conexión a la base de datos
+     * Muestra información detallada de la base de datos
      */
-    public void initialize() {
-        MessageUtils.sendInfoMessage(logger, "Iniciando conexión a la base de datos...");
-
+    private void showDatabaseInfo() {
         try {
-            ConfigManager.DatabaseConfig dbConfig = configManager.getDatabaseConfig();
-
-            // Registrar el driver de MySQL
-            Class.forName("com.mysql.cj.jdbc.Driver");
-
-            // Establecer conexión
-            connection = DriverManager.getConnection(
-                dbConfig.getJdbcUrl(),
-                dbConfig.getUsername(),
-                dbConfig.getPassword()
-            );
-
-            // Configurar la conexión
-            connection.setAutoCommit(true);
-
-            isConnected = true;
-            MessageUtils.sendSuccessMessage(logger, "Conexión a la base de datos establecida");
-
-            // Crear tablas si no existen
-            createTables();
-
-            // Iniciar monitoreo de conexión
-            startConnectionMonitoring();
-
+            DatabaseInfo info = getDatabaseInfo();
+            if (info != null) {
+                MessageUtils.sendSeparator(logger);
+                MessageUtils.sendInfoMessage(logger, "📊 Información de la Base de Datos:");
+                MessageUtils.sendInfoMessage(logger, "  🗃️ Motor: " + info.getProductName() + " " + info.getProductVersion());
+                MessageUtils.sendInfoMessage(logger, "  🔌 Driver: " + info.getDriverName() + " " + info.getDriverVersion());
+                MessageUtils.sendInfoMessage(logger, "  🌐 Conexión: " + info.getHost() + ":" + info.getPort() + "/" + info.getDatabase());
+                MessageUtils.sendSeparator(logger);
+            }
         } catch (Exception e) {
-            MessageUtils.sendErrorMessage(logger, "Error al conectar con la base de datos: " + e.getMessage());
-            throw new RuntimeException("No se pudo establecer la conexión a la base de datos", e);
-        }
-    }
-
-    /**
-     * Crea las tablas necesarias en la base de datos
-     */
-    private void createTables() {
-        try {
-            MessageUtils.sendInfoMessage(logger, "Creando tablas de la base de datos...");
-
-            executeUpdate(CREATE_PLAYERS_TABLE);
-            executeUpdate(CREATE_SERVERS_TABLE);
-            executeUpdate(CREATE_PLUGIN_DATA_TABLE);
-
-            MessageUtils.sendSuccessMessage(logger, "Tablas de la base de datos creadas/verificadas correctamente");
-
-        } catch (SQLException e) {
-            MessageUtils.sendErrorMessage(logger, "Error al crear las tablas: " + e.getMessage());
-            throw new RuntimeException("No se pudieron crear las tablas de la base de datos", e);
+            MessageUtils.sendWarningMessage(logger, "No se pudo obtener información detallada de la base de datos");
         }
     }
 
@@ -193,7 +103,7 @@ public class DatabaseManager {
         executor.scheduleWithFixedDelay(() -> {
             try {
                 if (!isConnectionValid()) {
-                    MessageUtils.sendWarningMessage(logger, "Conexión a la base de datos perdida. Intentando reconectar...");
+                    MessageUtils.sendWarningMessage(logger, "⚠ Conexión a la base de datos perdida. Intentando reconectar...");
                     reconnect();
                 }
             } catch (Exception e) {
@@ -201,7 +111,7 @@ public class DatabaseManager {
             }
         }, 30, 30, TimeUnit.SECONDS);
 
-        MessageUtils.sendInfoMessage(logger, "Monitoreo de conexión a la base de datos iniciado");
+        MessageUtils.sendInfoMessage(logger, "📊 Monitoreo de conexión a la base de datos iniciado");
     }
 
     /**
@@ -224,20 +134,19 @@ public class DatabaseManager {
                 connection.close();
             }
 
-            ConfigManager.DatabaseConfig dbConfig = configManager.getDatabaseConfig();
             connection = DriverManager.getConnection(
-                dbConfig.getJdbcUrl(),
-                dbConfig.getUsername(),
-                dbConfig.getPassword()
+                    dbConfig.getJdbcUrl(),
+                    dbConfig.getUsername(),
+                    dbConfig.getPassword()
             );
 
             connection.setAutoCommit(true);
             isConnected = true;
 
-            MessageUtils.sendSuccessMessage(logger, "Reconexión a la base de datos exitosa");
+            MessageUtils.sendSuccessMessage(logger, "🔄 Reconexión a la base de datos exitosa");
 
         } catch (SQLException e) {
-            MessageUtils.sendErrorMessage(logger, "Error al reconectar a la base de datos: " + e.getMessage());
+            MessageUtils.sendErrorMessage(logger, "❌ Error al reconectar a la base de datos: " + e.getMessage());
             isConnected = false;
         }
     }
@@ -338,9 +247,7 @@ public class DatabaseManager {
             transaction.execute(connection);
             connection.commit();
 
-            if (configManager.isDebugMode()) {
-                MessageUtils.sendDebugMessage(logger, "Transacción ejecutada exitosamente");
-            }
+            MessageUtils.sendDebugMessage(logger, "Transacción ejecutada exitosamente");
 
         } catch (SQLException e) {
             connection.rollback();
@@ -352,45 +259,55 @@ public class DatabaseManager {
     }
 
     /**
-     * Obtiene estadísticas de la base de datos
+     * Obtiene información básica de la base de datos
      */
-    public DatabaseStats getStats() {
+    public DatabaseInfo getDatabaseInfo() {
         try {
-            DatabaseStats stats = new DatabaseStats();
-
-            // Contar jugadores
-            try (ResultSet rs = executeQuery("SELECT COUNT(*) FROM grivyzom_players")) {
-                if (rs.next()) {
-                    stats.totalPlayers = rs.getInt(1);
-                }
-            }
-
-            // Contar jugadores online
-            try (ResultSet rs = executeQuery("SELECT COUNT(*) FROM grivyzom_players WHERE is_online = TRUE")) {
-                if (rs.next()) {
-                    stats.onlinePlayers = rs.getInt(1);
-                }
-            }
-
-            // Contar servidores
-            try (ResultSet rs = executeQuery("SELECT COUNT(*) FROM grivyzom_servers")) {
-                if (rs.next()) {
-                    stats.totalServers = rs.getInt(1);
-                }
-            }
-
-            // Contar datos de plugins
-            try (ResultSet rs = executeQuery("SELECT COUNT(*) FROM grivyzom_plugin_data")) {
-                if (rs.next()) {
-                    stats.pluginDataEntries = rs.getInt(1);
-                }
-            }
-
-            return stats;
-
+            DatabaseMetaData metaData = connection.getMetaData();
+            return new DatabaseInfo(
+                    metaData.getDatabaseProductName(),
+                    metaData.getDatabaseProductVersion(),
+                    metaData.getDriverName(),
+                    metaData.getDriverVersion(),
+                    dbConfig.getHost(),
+                    dbConfig.getPort(),
+                    dbConfig.getDatabase()
+            );
         } catch (SQLException e) {
-            MessageUtils.sendErrorMessage(logger, "Error al obtener estadísticas de la base de datos: " + e.getMessage());
-            return new DatabaseStats();
+            MessageUtils.sendErrorMessage(logger, "Error al obtener información de la base de datos: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Verifica si una tabla existe en la base de datos
+     */
+    public boolean tableExists(String tableName) {
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet tables = metaData.getTables(null, null, tableName, new String[]{"TABLE"});
+            return tables.next();
+        } catch (SQLException e) {
+            MessageUtils.sendErrorMessage(logger, "Error al verificar existencia de tabla: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Obtiene el número de tablas en la base de datos
+     */
+    public int getTableCount() {
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet tables = metaData.getTables(null, null, "%", new String[]{"TABLE"});
+            int count = 0;
+            while (tables.next()) {
+                count++;
+            }
+            return count;
+        } catch (SQLException e) {
+            MessageUtils.sendErrorMessage(logger, "Error al contar tablas: " + e.getMessage());
+            return 0;
         }
     }
 
@@ -410,7 +327,7 @@ public class DatabaseManager {
 
             if (connection != null && !connection.isClosed()) {
                 connection.close();
-                MessageUtils.sendInfoMessage(logger, "Conexión a la base de datos cerrada");
+                MessageUtils.sendInfoMessage(logger, "🔌 Conexión a la base de datos cerrada correctamente");
             }
 
         } catch (Exception e) {
@@ -427,6 +344,10 @@ public class DatabaseManager {
         return connection;
     }
 
+    public DatabaseConfigManager.DatabaseConfig getDbConfig() {
+        return dbConfig;
+    }
+
     /**
      * Interfaz funcional para transacciones
      */
@@ -436,19 +357,42 @@ public class DatabaseManager {
     }
 
     /**
-     * Clase para estadísticas de la base de datos
+     * Clase para información de la base de datos
      */
-    public static class DatabaseStats {
-        public int totalPlayers = 0;
-        public int onlinePlayers = 0;
-        public int totalServers = 0;
-        public int pluginDataEntries = 0;
+    public static class DatabaseInfo {
+        private final String productName;
+        private final String productVersion;
+        private final String driverName;
+        private final String driverVersion;
+        private final String host;
+        private final int port;
+        private final String database;
+
+        public DatabaseInfo(String productName, String productVersion, String driverName,
+                            String driverVersion, String host, int port, String database) {
+            this.productName = productName;
+            this.productVersion = productVersion;
+            this.driverName = driverName;
+            this.driverVersion = driverVersion;
+            this.host = host;
+            this.port = port;
+            this.database = database;
+        }
+
+        // Getters
+        public String getProductName() { return productName; }
+        public String getProductVersion() { return productVersion; }
+        public String getDriverName() { return driverName; }
+        public String getDriverVersion() { return driverVersion; }
+        public String getHost() { return host; }
+        public int getPort() { return port; }
+        public String getDatabase() { return database; }
 
         @Override
         public String toString() {
             return String.format(
-                "DatabaseStats{totalPlayers=%d, onlinePlayers=%d, totalServers=%d, pluginDataEntries=%d}",
-                totalPlayers, onlinePlayers, totalServers, pluginDataEntries
+                    "DatabaseInfo{product='%s %s', driver='%s %s', connection='%s:%d/%s'}",
+                    productName, productVersion, driverName, driverVersion, host, port, database
             );
         }
     }

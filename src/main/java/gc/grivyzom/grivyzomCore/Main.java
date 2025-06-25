@@ -9,8 +9,8 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import gc.grivyzom.grivyzomCore.config.ConfigManager;
 import gc.grivyzom.grivyzomCore.config.DatabaseConfigManager;
 import gc.grivyzom.grivyzomCore.database.DatabaseManager;
-import gc.grivyzom.grivyzomCore.managers.PlayerDataManager;
-import gc.grivyzom.grivyzomCore.messaging.PluginMessageManager;
+//import gc.grivyzom.grivyzomCore.managers.PlayerDataManager;
+//import gc.grivyzom.grivyzomCore.messaging.PluginMessageManager;
 import gc.grivyzom.grivyzomCore.utils.MessageUtils;
 import org.slf4j.Logger;
 
@@ -38,8 +38,8 @@ public class Main {
     private ConfigManager configManager;
     private DatabaseConfigManager databaseConfigManager;
     private DatabaseManager databaseManager;
-    private PlayerDataManager playerDataManager;
-    private PluginMessageManager pluginMessageManager;
+    //private PlayerDataManager playerDataManager;
+    //private PluginMessageManager pluginMessageManager;
 
     private static Main instance;
 
@@ -65,13 +65,13 @@ public class Main {
             databaseManager = new DatabaseManager(databaseConfigManager.createDatabaseConfig(), logger);
             databaseManager.initialize();
 
-            // Inicializar gestores
-            playerDataManager = new PlayerDataManager(databaseManager, logger);
-            pluginMessageManager = new PluginMessageManager(server, logger);
+            // TODO: Inicializar gestores cuando estén las tablas creadas
+            //playerDataManager = new PlayerDataManager(databaseManager, logger);
+            //pluginMessageManager = new PluginMessageManager(server, logger);
 
-            // Registrar eventos y canales de mensajería
-            server.getEventManager().register(this, playerDataManager);
-            pluginMessageManager.registerChannels();
+            // TODO: Registrar eventos y canales de mensajería
+            //server.getEventManager().register(this, playerDataManager);
+            //pluginMessageManager.registerChannels();
 
             MessageUtils.sendSuccessMessage(logger, "Plugin inicializado correctamente");
             MessageUtils.sendInfoMessage(logger, "Versión: 0.1-SNAPSHOT");
@@ -92,9 +92,10 @@ public class Main {
                 databaseManager.close();
             }
 
-            if (pluginMessageManager != null) {
-                pluginMessageManager.unregisterChannels();
-            }
+            // TODO: Desregistrar canales cuando esté implementado
+            //if (pluginMessageManager != null) {
+            //    pluginMessageManager.unregisterChannels();
+            //}
 
             MessageUtils.sendSuccessMessage(logger, "Plugin cerrado correctamente");
 
@@ -120,6 +121,8 @@ public class Main {
         return databaseManager;
     }
 
+    // TODO: Descomentar cuando estén implementados
+    /*
     public PlayerDataManager getPlayerDataManager() {
         return playerDataManager;
     }
@@ -127,6 +130,7 @@ public class Main {
     public PluginMessageManager getPluginMessageManager() {
         return pluginMessageManager;
     }
+    */
 
     public ProxyServer getServer() {
         return server;

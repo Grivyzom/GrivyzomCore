@@ -2,19 +2,14 @@ package gc.grivyzom.grivyzomCore.messaging;
 
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.PluginMessageEvent;
-import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import gc.grivyzom.grivyzomCore.Main;
-import gc.grivyzom.grivyzomCore.models.GrivyzomPlayer;
 import gc.grivyzom.grivyzomCore.utils.MessageUtils;
 import org.slf4j.Logger;
 
 import java.io.*;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Gestor de mensajería entre plugins para permitir comunicación
@@ -38,14 +33,11 @@ public class PluginMessageManager {
     private static final MinecraftChannelIdentifier PVP_CHANNEL =
             MinecraftChannelIdentifier.from("grivyzom:pvp");
 
-    // Tipos de mensajes
-    private static final String GET_PLAYER_DATA = "GET_PLAYER_DATA";
-    private static final String UPDATE_COINS = "UPDATE_COINS";
-    private static final String UPDATE_GEMS = "UPDATE_GEMS";
-    private static final String UPDATE_RANK = "UPDATE_RANK";
-    private static final String PLAYER_DATA_RESPONSE = "PLAYER_DATA_RESPONSE";
-    private static final String GET_TOP_PLAYERS = "GET_TOP_PLAYERS";
-    private static final String SYNC_PLAYER_DATA = "SYNC_PLAYER_DATA";
+    // Tipos de mensajes básicos
+    private static final String PING = "PING";
+    private static final String PONG = "PONG";
+    private static final String STATUS_REQUEST = "STATUS_REQUEST";
+    private static final String STATUS_RESPONSE = "STATUS_RESPONSE";
 
     public PluginMessageManager(ProxyServer server, Logger logger) {
         this.server = server;
@@ -56,27 +48,41 @@ public class PluginMessageManager {
      * Registra los canales de mensajería
      */
     public void registerChannels() {
-        server.getChannelRegistrar().register(GRIVYZOM_CHANNEL);
-        server.getChannelRegistrar().register(ECONOMY_CHANNEL);
-        server.getChannelRegistrar().register(RANKUP_CHANNEL);
-        server.getChannelRegistrar().register(PVP_CHANNEL);
+        try {
+            server.getChannelRegistrar().register(GRIVYZOM_CHANNEL);
+            server.getChannelRegistrar().register(ECONOMY_CHANNEL);
+            server.getChannelRegistrar().register(RANKUP_CHANNEL);
+            server.getChannelRegistrar().register(PVP_CHANNEL);
 
-        // Registrar el listener de eventos
-        server.getEventManager().register(Main.getInstance(), this);
+            // Registrar el listener de eventos
+            server.getEventManager().register(Main.getInstance(), this);
 
-        MessageUtils.sendSuccessMessage(logger, "Canales de mensajería registrados correctamente");
+            MessageUtils.sendSuccessMessage(logger, "📡 Canales de mensajería registrados correctamente");
+            MessageUtils.sendInfoMessage(logger, "  🔗 grivyzom:core - Canal principal");
+            MessageUtils.sendInfoMessage(logger, "  💰 grivyzom:economy - Canal de economía");
+            MessageUtils.sendInfoMessage(logger, "  📈 grivyzom:rankup - Canal de rangos");
+            MessageUtils.sendInfoMessage(logger, "  ⚔️ grivyzom:pvp - Canal de PvP");
+
+        } catch (Exception e) {
+            MessageUtils.sendErrorMessage(logger, "❌ Error al registrar canales de mensajería: " + e.getMessage());
+        }
     }
 
     /**
      * Desregistra los canales de mensajería
      */
     public void unregisterChannels() {
-        server.getChannelRegistrar().unregister(GRIVYZOM_CHANNEL);
-        server.getChannelRegistrar().unregister(ECONOMY_CHANNEL);
-        server.getChannelRegistrar().unregister(RANKUP_CHANNEL);
-        server.getChannelRegistrar().unregister(PVP_CHANNEL);
+        try {
+            server.getChannelRegistrar().unregister(GRIVYZOM_CHANNEL);
+            server.getChannelRegistrar().unregister(ECONOMY_CHANNEL);
+            server.getChannelRegistrar().unregister(RANKUP_CHANNEL);
+            server.getChannelRegistrar().unregister(PVP_CHANNEL);
 
-        MessageUtils.sendInfoMessage(logger, "Canales de mensajería desregistrados");
+            MessageUtils.sendInfoMessage(logger, "📡 Canales de mensajería desregistrados");
+
+        } catch (Exception e) {
+            MessageUtils.sendErrorMessage(logger, "❌ Error al desregistrar canales: " + e.getMessage());
+        }
     }
 
     /**
@@ -88,7 +94,7 @@ public class PluginMessageManager {
             return;
         }
 
-        ServerConnection server = (ServerConnection) event.getSource();
+        ServerConnection serverConnection = (ServerConnection) event.getSource();
         MinecraftChannelIdentifier identifier = event.getIdentifier();
 
         try {
@@ -97,217 +103,113 @@ public class PluginMessageManager {
 
             String messageType = input.readUTF();
 
+            // Log de debug si está habilitado
             if (Main.getInstance().getConfigManager().isDebugMode()) {
                 MessageUtils.sendDebugMessage(logger,
-                        String.format("Mensaje recibido - Canal: %s, Tipo: %s, Servidor: %s",
-                                identifier.getId(), messageType, server.getServerInfo().getName()));
+                        String.format("📨 Mensaje recibido - Canal: %s, Tipo: %s, Servidor: %s",
+                                identifier.getId(), messageType, serverConnection.getServerInfo().getName()));
             }
 
             // Procesar según el canal y tipo de mensaje
-            if (identifier.equals(GRIVYZOM_CHANNEL) || identifier.equals(ECONOMY_CHANNEL)) {
-                handleEconomyMessage(server, messageType, input);
-            } else if (identifier.equals(RANKUP_CHANNEL)) {
-                handleRankupMessage(server, messageType, input);
-            } else if (identifier.equals(PVP_CHANNEL)) {
-                handlePvPMessage(server, messageType, input);
-            }
+            handleMessage(serverConnection, identifier, messageType, input);
 
         } catch (IOException e) {
             MessageUtils.sendErrorMessage(logger,
-                    "Error al procesar mensaje de plugin: " + e.getMessage());
+                    "❌ Error al procesar mensaje de plugin: " + e.getMessage());
         }
     }
 
     /**
-     * Maneja mensajes relacionados con economía
+     * Maneja los diferentes tipos de mensajes según el canal
      */
-    private void handleEconomyMessage(ServerConnection server, String messageType, DataInputStream input)
-            throws IOException {
+    private void handleMessage(ServerConnection serverConnection, MinecraftChannelIdentifier identifier,
+                               String messageType, DataInputStream input) throws IOException {
 
         switch (messageType) {
-            case GET_PLAYER_DATA -> {
-                String playerUuidStr = input.readUTF();
-                UUID playerUuid = UUID.fromString(playerUuidStr);
-
-                // Obtener datos del jugador de manera asíncrona
-                Main.getInstance().getPlayerDataManager()
-                        .getPlayer(playerUuid)
-                        .thenAccept(playerOpt -> {
-                            if (playerOpt.isPresent()) {
-                                sendPlayerDataResponse(server, playerOpt.get());
-                            } else {
-                                MessageUtils.sendWarningMessage(logger,
-                                        "Datos de jugador solicitados no encontrados: " + playerUuid);
-                            }
-                        });
-            }
-
-            case UPDATE_COINS -> {
-                String playerUuidStr = input.readUTF();
-                double newCoins = input.readDouble();
-                UUID playerUuid = UUID.fromString(playerUuidStr);
-
-                Main.getInstance().getPlayerDataManager()
-                        .updatePlayerCoins(playerUuid, newCoins)
-                        .thenAccept(success -> {
-                            if (success && Main.getInstance().getConfigManager().isDebugMode()) {
-                                MessageUtils.sendDebugMessage(logger,
-                                        String.format("Monedas actualizadas para %s: %.2f", playerUuid, newCoins));
-                            }
-                        });
-            }
-
-            case UPDATE_GEMS -> {
-                String playerUuidStr = input.readUTF();
-                int newGems = input.readInt();
-                UUID playerUuid = UUID.fromString(playerUuidStr);
-
-                Main.getInstance().getPlayerDataManager()
-                        .updatePlayerGems(playerUuid, newGems)
-                        .thenAccept(success -> {
-                            if (success && Main.getInstance().getConfigManager().isDebugMode()) {
-                                MessageUtils.sendDebugMessage(logger,
-                                        String.format("Gemas actualizadas para %s: %d", playerUuid, newGems));
-                            }
-                        });
-            }
-
-            case GET_TOP_PLAYERS -> {
-                int limit = input.readInt();
-
-                Main.getInstance().getPlayerDataManager()
-                        .getTopPlayersByCoins(limit)
-                        .thenAccept(topPlayers -> sendTopPlayersResponse(server, topPlayers));
+            case PING -> handlePing(serverConnection, identifier);
+            case STATUS_REQUEST -> handleStatusRequest(serverConnection, identifier);
+            default -> {
+                if (Main.getInstance().getConfigManager().isDebugMode()) {
+                    MessageUtils.sendDebugMessage(logger,
+                            "⚠️ Mensaje no reconocido: " + messageType + " en canal: " + identifier.getId());
+                }
             }
         }
     }
 
     /**
-     * Maneja mensajes relacionados con rankup
+     * Maneja mensajes PING (responde con PONG)
      */
-    private void handleRankupMessage(ServerConnection server, String messageType, DataInputStream input)
-            throws IOException {
+    private void handlePing(ServerConnection serverConnection, MinecraftChannelIdentifier channel) {
+        try {
+            ByteArrayOutputStream stream = new ByteArrayOutputStream();
+            DataOutputStream output = new DataOutputStream(stream);
 
-        switch (messageType) {
-            case UPDATE_RANK -> {
-                String playerUuidStr = input.readUTF();
-                String newRank = input.readUTF();
-                UUID playerUuid = UUID.fromString(playerUuidStr);
+            output.writeUTF(PONG);
+            output.writeUTF("GrivyzomCore");
+            output.writeLong(System.currentTimeMillis());
 
-                // Actualizar rank en la base de datos
-                CompletableFuture.runAsync(() -> {
+            serverConnection.sendPluginMessage(channel, stream.toByteArray());
+
+            if (Main.getInstance().getConfigManager().isDebugMode()) {
+                MessageUtils.sendDebugMessage(logger,
+                        "🏓 PONG enviado a " + serverConnection.getServerInfo().getName());
+            }
+
+        } catch (IOException e) {
+            MessageUtils.sendErrorMessage(logger, "❌ Error al enviar PONG: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Maneja solicitudes de estado del sistema
+     */
+    private void handleStatusRequest(ServerConnection serverConnection, MinecraftChannelIdentifier channel) {
+        try {
+            ByteArrayOutputStream stream = new ByteArrayOutputStream();
+            DataOutputStream output = new DataOutputStream(stream);
+
+            output.writeUTF(STATUS_RESPONSE);
+            output.writeBoolean(Main.getInstance().getDatabaseManager().isConnected());
+            output.writeLong(System.currentTimeMillis());
+            output.writeInt(server.getPlayerCount());
+            output.writeString("GrivyzomCore v0.1-SNAPSHOT");
+
+            serverConnection.sendPluginMessage(channel, stream.toByteArray());
+
+            MessageUtils.sendDebugMessage(logger,
+                    "📊 Estado del sistema enviado a " + serverConnection.getServerInfo().getName());
+
+        } catch (IOException e) {
+            MessageUtils.sendErrorMessage(logger, "❌ Error al enviar estado: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Envía un mensaje PING a todos los servidores conectados
+     */
+    public void pingAllServers() {
+        server.getAllServers().forEach(serverInfo -> {
+            serverInfo.getPlayersConnected().stream().findFirst().ifPresent(player -> {
+                player.getCurrentServer().ifPresent(connection -> {
                     try {
-                        Main.getInstance().getDatabaseManager().executeUpdate(
-                                "UPDATE grivyzom_players SET rank_id = ? WHERE uuid = ?",
-                                newRank, playerUuid.toString()
-                        );
+                        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                        DataOutputStream output = new DataOutputStream(stream);
 
-                        // Actualizar cache si el jugador está online
-                        Optional<Player> player = this.server.getPlayer(playerUuid);
-                        if (player.isPresent()) {
-                            Main.getInstance().getPlayerDataManager()
-                                    .getPlayer(playerUuid)
-                                    .thenAccept(playerOpt -> {
-                                        if (playerOpt.isPresent()) {
-                                            playerOpt.get().setRankId(newRank);
-                                        }
-                                    });
-                        }
+                        output.writeUTF(PING);
+                        output.writeLong(System.currentTimeMillis());
 
-                        if (Main.getInstance().getConfigManager().isDebugMode()) {
-                            MessageUtils.sendDebugMessage(logger,
-                                    String.format("Rank actualizado para %s: %s", playerUuid, newRank));
-                        }
+                        connection.sendPluginMessage(GRIVYZOM_CHANNEL, stream.toByteArray());
 
-                    } catch (Exception e) {
+                    } catch (IOException e) {
                         MessageUtils.sendErrorMessage(logger,
-                                "Error al actualizar rank: " + e.getMessage());
+                                "❌ Error al enviar PING a " + serverInfo.getName() + ": " + e.getMessage());
                     }
                 });
-            }
-        }
-    }
+            });
+        });
 
-    /**
-     * Maneja mensajes relacionados con PvP
-     */
-    private void handlePvPMessage(ServerConnection server, String messageType, DataInputStream input)
-            throws IOException {
-
-        switch (messageType) {
-            case SYNC_PLAYER_DATA -> {
-                String playerUuidStr = input.readUTF();
-                UUID playerUuid = UUID.fromString(playerUuidStr);
-
-                // Sincronizar datos del jugador desde el cache
-                Main.getInstance().getPlayerDataManager()
-                        .getPlayer(playerUuid)
-                        .thenAccept(playerOpt -> {
-                            if (playerOpt.isPresent()) {
-                                sendPlayerDataResponse(server, playerOpt.get());
-                            }
-                        });
-            }
-        }
-    }
-
-    /**
-     * Envía respuesta con datos del jugador
-     */
-    private void sendPlayerDataResponse(ServerConnection server, GrivyzomPlayer player) {
-        try {
-            ByteArrayOutputStream stream = new ByteArrayOutputStream();
-            DataOutputStream output = new DataOutputStream(stream);
-
-            output.writeUTF(PLAYER_DATA_RESPONSE);
-            output.writeUTF(player.getUuid().toString());
-            output.writeUTF(player.getUsername());
-            output.writeUTF(player.getDisplayName());
-            output.writeDouble(player.getCoins());
-            output.writeInt(player.getGems());
-            output.writeUTF(player.getRankId());
-            output.writeLong(player.getTotalPlaytime());
-            output.writeBoolean(player.isOnline());
-
-            if (player.getLastServer() != null) {
-                output.writeUTF(player.getLastServer());
-            } else {
-                output.writeUTF("");
-            }
-
-            server.sendPluginMessage(GRIVYZOM_CHANNEL, stream.toByteArray());
-
-        } catch (IOException e) {
-            MessageUtils.sendErrorMessage(logger,
-                    "Error al enviar respuesta de datos del jugador: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Envía respuesta con top de jugadores
-     */
-    private void sendTopPlayersResponse(ServerConnection server, java.util.List<GrivyzomPlayer> topPlayers) {
-        try {
-            ByteArrayOutputStream stream = new ByteArrayOutputStream();
-            DataOutputStream output = new DataOutputStream(stream);
-
-            output.writeUTF("TOP_PLAYERS_RESPONSE");
-            output.writeInt(topPlayers.size());
-
-            for (GrivyzomPlayer player : topPlayers) {
-                output.writeUTF(player.getUuid().toString());
-                output.writeUTF(player.getUsername());
-                output.writeDouble(player.getCoins());
-                output.writeInt(player.getGems());
-                output.writeUTF(player.getRankId());
-            }
-
-            server.sendPluginMessage(ECONOMY_CHANNEL, stream.toByteArray());
-
-        } catch (IOException e) {
-            MessageUtils.sendErrorMessage(logger,
-                    "Error al enviar respuesta de top jugadores: " + e.getMessage());
-        }
+        MessageUtils.sendDebugMessage(logger, "🏓 PING enviado a todos los servidores");
     }
 
     /**
@@ -330,23 +232,89 @@ public class PluginMessageManager {
 
                 } catch (IOException e) {
                     MessageUtils.sendErrorMessage(logger,
-                            "Error al enviar mensaje broadcast: " + e.getMessage());
+                            "❌ Error al enviar mensaje broadcast: " + e.getMessage());
                 }
             });
         });
-    }
 
-    /**
-     * Notifica a todos los servidores sobre actualización de jugador
-     */
-    public void notifyPlayerUpdate(UUID playerUuid, String updateType) {
-        broadcastMessage("PLAYER_UPDATE", playerUuid.toString(), updateType);
+        if (Main.getInstance().getConfigManager().isDebugMode()) {
+            MessageUtils.sendDebugMessage(logger, "📡 Mensaje broadcast enviado: " + messageType);
+        }
     }
 
     /**
      * Envía notificación de mantenimiento a todos los servidores
      */
     public void notifyMaintenance(boolean isStarting) {
-        broadcastMessage("MAINTENANCE", isStarting ? "START" : "END");
+        String status = isStarting ? "START" : "END";
+        broadcastMessage("MAINTENANCE", status, String.valueOf(System.currentTimeMillis()));
+
+        MessageUtils.sendInfoMessage(logger,
+                "🔧 Notificación de mantenimiento enviada: " + (isStarting ? "INICIANDO" : "FINALIZANDO"));
+    }
+
+    /**
+     * Solicita el estado de todos los servidores
+     */
+    public void requestStatusFromAllServers() {
+        server.getAllServers().forEach(serverInfo -> {
+            serverInfo.getPlayersConnected().stream().findFirst().ifPresent(player -> {
+                player.getCurrentServer().ifPresent(connection -> {
+                    try {
+                        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                        DataOutputStream output = new DataOutputStream(stream);
+
+                        output.writeUTF(STATUS_REQUEST);
+                        output.writeLong(System.currentTimeMillis());
+
+                        connection.sendPluginMessage(GRIVYZOM_CHANNEL, stream.toByteArray());
+
+                    } catch (IOException e) {
+                        MessageUtils.sendErrorMessage(logger,
+                                "❌ Error al solicitar estado de " + serverInfo.getName() + ": " + e.getMessage());
+                    }
+                });
+            });
+        });
+
+        MessageUtils.sendDebugMessage(logger, "📊 Solicitud de estado enviada a todos los servidores");
+    }
+
+    /**
+     * Obtiene estadísticas de los canales registrados
+     */
+    public ChannelStats getChannelStats() {
+        return new ChannelStats(
+                server.getChannelRegistrar().getChannelsForPlugin(Main.getInstance()).size(),
+                server.getAllServers().size(),
+                server.getPlayerCount()
+        );
+    }
+
+    /**
+     * Clase para estadísticas de canales
+     */
+    public static class ChannelStats {
+        private final int registeredChannels;
+        private final int connectedServers;
+        private final int totalPlayers;
+
+        public ChannelStats(int registeredChannels, int connectedServers, int totalPlayers) {
+            this.registeredChannels = registeredChannels;
+            this.connectedServers = connectedServers;
+            this.totalPlayers = totalPlayers;
+        }
+
+        public int getRegisteredChannels() { return registeredChannels; }
+        public int getConnectedServers() { return connectedServers; }
+        public int getTotalPlayers() { return totalPlayers; }
+
+        @Override
+        public String toString() {
+            return String.format(
+                    "ChannelStats{channels=%d, servers=%d, players=%d}",
+                    registeredChannels, connectedServers, totalPlayers
+            );
+        }
     }
 }
