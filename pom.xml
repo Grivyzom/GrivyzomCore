@@ -57,7 +57,11 @@
                                     <pattern>com.moandjiezana.toml</pattern>
                                     <shadedPattern>gc.grivyzom.systemgrv.libs.toml</shadedPattern>
                                 </relocation>
-                                <!-- ❌ TEMPORALMENTE REMOVIDO HikariCP -->
+                                <!-- Relocate SnakeYAML -->
+                                <relocation>
+                                    <pattern>org.yaml</pattern>
+                                    <shadedPattern>gc.grivyzom.systemgrv.libs.yaml</shadedPattern>
+                                </relocation>
                             </relocations>
                         </configuration>
                     </execution>
@@ -93,19 +97,25 @@
             <version>8.0.33</version>
         </dependency>
 
-        <!-- ❌ TEMPORALMENTE REMOVIDO HikariCP
-        <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <version>5.1.0</version>
-        </dependency>
-        -->
-
         <!-- TOML Parser for configuration -->
         <dependency>
             <groupId>com.moandjiezana.toml</groupId>
             <artifactId>toml4j</artifactId>
             <version>0.7.2</version>
+        </dependency>
+
+        <!-- SnakeYAML for database.yml -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.0</version>
+        </dependency>
+
+        <!-- SnakeYAML for database.yml -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.0</version>
         </dependency>
 
         <!-- SLF4J (ya incluido en Velocity, pero para compilación) -->

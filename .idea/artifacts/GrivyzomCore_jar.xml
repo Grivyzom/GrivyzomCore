@@ -1,0 +1,13 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="GrivyzomCore:jar">
+    <output-path>$PROJECT_DIR$/</output-path>
+    <root id="archive" name="GrivyzomCore.jar">
+      <element id="module-output" name="GrivyzomCore" />
+      <element id="extracted-dir" path="$MAVEN_REPOSITORY$/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$MAVEN_REPOSITORY$/com/mysql/mysql-connector-j/8.0.33/mysql-connector-j-8.0.33.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$MAVEN_REPOSITORY$/com/google/protobuf/protobuf-java/3.21.9/protobuf-java-3.21.9.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$MAVEN_REPOSITORY$/org/yaml/snakeyaml/2.0/snakeyaml-2.0.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$MAVEN_REPOSITORY$/com/moandjiezana/toml/toml4j/0.7.2/toml4j-0.7.2.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

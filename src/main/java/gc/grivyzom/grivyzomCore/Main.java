@@ -5,12 +5,12 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.plugin.Plugin;
+import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import gc.grivyzom.grivyzomCore.config.ConfigManager;
 import gc.grivyzom.grivyzomCore.config.DatabaseConfigManager;
 import gc.grivyzom.grivyzomCore.database.DatabaseManager;
-//import gc.grivyzom.grivyzomCore.managers.PlayerDataManager;
-//import gc.grivyzom.grivyzomCore.messaging.PluginMessageManager;
+import gc.grivyzom.grivyzomCore.messaging.PluginMessageManager;
 import gc.grivyzom.grivyzomCore.utils.MessageUtils;
 import org.slf4j.Logger;
 
@@ -38,8 +38,10 @@ public class Main {
     private ConfigManager configManager;
     private DatabaseConfigManager databaseConfigManager;
     private DatabaseManager databaseManager;
+    private PluginMessageManager pluginMessageManager;
+
+    // TODO: Activar cuando estén las tablas creadas
     //private PlayerDataManager playerDataManager;
-    //private PluginMessageManager pluginMessageManager;
 
     private static Main instance;
 
@@ -65,42 +67,42 @@ public class Main {
             databaseManager = new DatabaseManager(databaseConfigManager.createDatabaseConfig(), logger);
             databaseManager.initialize();
 
+            // Inicializar sistema de mensajería (funciona sin tablas)
+            pluginMessageManager = new PluginMessageManager(server, logger);
+            pluginMessageManager.registerChannels();
+
             // TODO: Inicializar gestores cuando estén las tablas creadas
             //playerDataManager = new PlayerDataManager(databaseManager, logger);
-            //pluginMessageManager = new PluginMessageManager(server, logger);
-
-            // TODO: Registrar eventos y canales de mensajería
             //server.getEventManager().register(this, playerDataManager);
-            //pluginMessageManager.registerChannels();
 
-            MessageUtils.sendSuccessMessage(logger, "Plugin inicializado correctamente");
-            MessageUtils.sendInfoMessage(logger, "Versión: 0.1-SNAPSHOT");
-            MessageUtils.sendInfoMessage(logger, "Autor: Francisco Fuentes");
+            MessageUtils.sendSuccessMessage(logger, "🎉 Plugin inicializado correctamente");
+            MessageUtils.sendInfoMessage(logger, "📦 Versión: 0.1-SNAPSHOT");
+            MessageUtils.sendInfoMessage(logger, "👨‍💻 Autor: Francisco Fuentes");
+            MessageUtils.sendInfoMessage(logger, "🌐 Canales de mensajería activos");
 
         } catch (Exception e) {
-            MessageUtils.sendErrorMessage(logger, "Error durante la inicialización: " + e.getMessage());
+            MessageUtils.sendErrorMessage(logger, "💥 Error durante la inicialización: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
-        MessageUtils.sendInfoMessage(logger, "Cerrando GrivyzomCore...");
+        MessageUtils.sendInfoMessage(logger, "🔄 Cerrando GrivyzomCore...");
 
         try {
             if (databaseManager != null) {
                 databaseManager.close();
             }
 
-            // TODO: Desregistrar canales cuando esté implementado
-            //if (pluginMessageManager != null) {
-            //    pluginMessageManager.unregisterChannels();
-            //}
+            if (pluginMessageManager != null) {
+                pluginMessageManager.unregisterChannels();
+            }
 
-            MessageUtils.sendSuccessMessage(logger, "Plugin cerrado correctamente");
+            MessageUtils.sendSuccessMessage(logger, "✅ Plugin cerrado correctamente");
 
         } catch (Exception e) {
-            MessageUtils.sendErrorMessage(logger, "Error durante el cierre: " + e.getMessage());
+            MessageUtils.sendErrorMessage(logger, "❌ Error durante el cierre: " + e.getMessage());
         }
     }
 
@@ -121,14 +123,14 @@ public class Main {
         return databaseManager;
     }
 
-    // TODO: Descomentar cuando estén implementados
+    public PluginMessageManager getPluginMessageManager() {
+        return pluginMessageManager;
+    }
+
+    // TODO: Descomentar cuando estén implementadas las tablas
     /*
     public PlayerDataManager getPlayerDataManager() {
         return playerDataManager;
-    }
-
-    public PluginMessageManager getPluginMessageManager() {
-        return pluginMessageManager;
     }
     */
 

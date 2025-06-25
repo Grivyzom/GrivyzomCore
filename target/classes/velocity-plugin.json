@@ -1,0 +1,1 @@
+{"id":"grivyzomcore","name":"GrivyzomCore","version":"0.1-SNAPSHOT","description":"Plugin central para la administración de usuarios del network Grivyzom","url":"www.grivyzom.com","authors":["Francisco Fuentes"],"dependencies":[],"main":"gc.grivyzom.grivyzomCore.Main"}
